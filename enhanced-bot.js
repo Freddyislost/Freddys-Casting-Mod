@@ -157,6 +157,7 @@ class DataManager {
         return this.accounts[discordId];
     }
     
+    // NEW: Create linking session that players join in-game
     createLinkingSession(discordId) {
         // Generate unique 5-digit Photon name
         let photonName;
@@ -235,115 +236,78 @@ class DataManager {
         const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
         return this.activeCodes.filter(c => c.createdAt > fiveMinutesAgo);
     }
-    
-    // Match tracking for MMR calculations
-    startMatch(roomCode, players) {
-        const match = {
-            id: Date.now().toString(),
-            roomCode: roomCode,
-            players: players,
-            startTime: Date.now(),
-            tags: [],
-            active: true
-        };
-        this.matches.push(match);
-        this.saveData(this.matchesFile, this.matches);
-        return match.id;
-    }
-    
-    recordTag(matchId, tagger, tagged) {
-        const match = this.matches.find(m => m.id === matchId);
-        if (match) {
-            match.tags.push({
-                tagger: tagger,
-                tagged: tagged,
-                timestamp: Date.now()
-            });
-            this.saveData(this.matchesFile, this.matches);
-        }
-    }
-    
-    endMatch(matchId) {
-        const match = this.matches.find(m => m.id === matchId);
-        if (match) {
-            match.active = false;
-            match.endTime = Date.now();
-            this.saveData(this.matchesFile, this.matches);
-            return match;
-        }
-        return null;
-    }
 }
 
+const dataManager = new DataManager();
+
 // ============================================
-// UTILITY FUNCTIONS
+// HELPER FUNCTIONS
 // ============================================
 function getRankFromMMR(mmr) {
-    for (const [rankName, rankData] of Object.entries(CONFIG.RANK_CONFIG)) {
-        if (mmr >= rankData.mmrRange[0] && mmr <= rankData.mmrRange[1]) {
-            return { name: rankName, ...rankData };
+    for (const [key, config] of Object.entries(CONFIG.RANK_CONFIG)) {
+        if (mmr >= config.mmrRange[0] && mmr <= config.mmrRange[1]) {
+            return config;
         }
     }
     return CONFIG.RANK_CONFIG.BRONZE;
 }
 
-function canAccessTier(mmr, tier) {
-    const rank = getRankFromMMR(mmr);
-    return rank.tier === tier;
+function getTierFromRoles(member) {
+    // Check roles from highest to lowest tier
+    if (member.roles.cache.has(CONFIG.ROLES.RUBY) || member.roles.cache.has(CONFIG.ROLES.SAPPHIRE)) {
+        return 'high';
+    }
+    if (member.roles.cache.has(CONFIG.ROLES.DIAMOND) || member.roles.cache.has(CONFIG.ROLES.GOLD)) {
+        return 'mid';
+    }
+    if (member.roles.cache.has(CONFIG.ROLES.SILVER) || member.roles.cache.has(CONFIG.ROLES.BRONZE)) {
+        return 'low';
+    }
+    return null;
+}
+
+async function isUserBanned(guild, userId) {
+    try {
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (!member) return false;
+        return member.roles.cache.has(CONFIG.ROLES.COMP_BANNED);
+    } catch (error) {
+        return false;
+    }
 }
 
 async function updateUserRoles(guild, userId, mmr) {
     try {
         const member = await guild.members.fetch(userId);
-        const rank = getRankFromMMR(mmr);
+        const newRank = getRankFromMMR(mmr);
         
         // Remove all rank roles
-        for (const rankData of Object.values(CONFIG.RANK_CONFIG)) {
-            const role = guild.roles.cache.get(rankData.roleId);
-            if (role && member.roles.cache.has(role.id)) {
-                await member.roles.remove(role);
+        const rankRoles = Object.values(CONFIG.ROLES).filter(r => r !== CONFIG.ROLES.COMP_BANNED);
+        for (const roleId of rankRoles) {
+            if (member.roles.cache.has(roleId)) {
+                await member.roles.remove(roleId);
             }
         }
         
         // Add new rank role
-        const newRole = guild.roles.cache.get(rank.roleId);
-        if (newRole) {
-            await member.roles.add(newRole);
-        }
-        
-        return rank;
+        await member.roles.add(newRank.roleId);
     } catch (error) {
-        console.error('Error updating user roles:', error);
-        return null;
-    }
-}
-
-async function isUserBanned(guild, userId) {
-    try {
-        const member = await guild.members.fetch(userId);
-        return member.roles.cache.has(CONFIG.ROLES.COMP_BANNED);
-    } catch (error) {
-        console.error('Error checking ban status:', error);
-        return false;
+        console.error('Error updating roles:', error);
     }
 }
 
 // ============================================
-// DISCORD BOT SETUP
+// DISCORD BOT
 // ============================================
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.DirectMessages
     ]
 });
-
-const app = express();
-app.use(express.json());
-
-const dataManager = new DataManager();
 
 // ============================================
 // DISCORD COMMANDS
@@ -351,191 +315,287 @@ const dataManager = new DataManager();
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     
-    const args = message.content.split(' ');
-    const command = args[0].toLowerCase();
+    const content = message.content.toLowerCase();
     
-    // !linkaccount command
-    if (command === '!linkaccount') {
-        // Check if already linked
-        const existingAccount = dataManager.getAccount(message.author.id);
-        if (existingAccount) {
-            return message.reply('Your account is already linked! Use `!stats` to view your profile.');
-        }
-        
-        // Check if banned
-        const isBanned = await isUserBanned(message.guild, message.author.id);
-        if (isBanned) {
-            return message.reply('❌ You are currently banned from competitive play.');
-        }
-        
-        // Generate temporary Photon name for linking
-        const photonName = dataManager.createLinkingSession(message.author.id);
-        
+    // !linkaccount - Generate linking code
+    if (content === '!linkaccount') {
         try {
-            const embed = new EmbedBuilder()
-                .setTitle('🔗 Link Your Account')
-                .setDescription('**Follow these steps to link your account:**')
+            const guilds = client.guilds.cache;
+            let isBanned = false;
+            
+            for (const guild of guilds.values()) {
+                if (await isUserBanned(guild, message.author.id)) {
+                    isBanned = true;
+                    break;
+                }
+            }
+            
+            if (isBanned) {
+                return message.reply('You are currently banned from competitive play.');
+            }
+            
+            const existingAccount = dataManager.getAccount(message.author.id);
+            if (existingAccount) {
+                return message.reply('Your account is already linked! Use `!unlink` if you want to link a different account.');
+            }
+            
+            // Generate 5-digit Photon name
+            const photonName = dataManager.createLinkingSession(message.author.id);
+            
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('🔗 Account Linking Instructions')
+                .setDescription('Follow these steps to link your account:')
                 .addFields(
-                    { name: '1️⃣ Change Your Photon Name', value: `In-game, temporarily change your Photon name to:\n\`\`\`${photonName}\`\`\``, inline: false },
-                    { name: '2️⃣ Join Linking Room', value: 'Wait for an admin to create a linking room and join it', inline: false },
-                    { name: '3️⃣ Get Linked', value: 'Admin will detect you and link your account automatically', inline: false },
-                    { name: '4️⃣ Change Name Back', value: 'After linking, you can change your Photon name to anything!', inline: false },
-                    { name: '⏱️ Expires In', value: '10 minutes', inline: true },
-                    { name: '🆔 Your Temp Name', value: `\`${photonName}\``, inline: true }
+                    { 
+                        name: '1️⃣ Join the Linking Room', 
+                        value: 'Join room code: **LINK**' 
+                    },
+                    { 
+                        name: '2️⃣ Change Your Photon Name', 
+                        value: `Set your Photon name to: **${photonName}**` 
+                    },
+                    { 
+                        name: '3️⃣ Wait for Admin', 
+                        value: 'An admin will detect you and complete the linking process' 
+                    },
+                    { 
+                        name: '✅ After Linking', 
+                        value: 'You can change your Photon name back to anything you want!' 
+                    },
+                    { 
+                        name: '⏰ Code Expires', 
+                        value: 'This code expires in 10 minutes' 
+                    }
                 )
                 .setColor(0x00AAFF)
-                .setFooter({ text: 'Your account will be linked by PlayFab ID, so you can change your name anytime after linking!' })
+                .setFooter({ text: 'Your account will be linked by PlayFab ID, so you can use any name after linking!' })
                 .setTimestamp();
             
-            await message.author.send({ embeds: [embed] });
-            message.reply('✅ Check your DMs for linking instructions!');
+            await message.author.send({ embeds: [dmEmbed] });
+            await message.reply('Check your DMs for linking instructions!');
+            
         } catch (error) {
-            message.reply('❌ I couldn\'t DM you. Please enable DMs from server members.');
+            console.error('Error in !linkaccount:', error);
+            message.reply('Failed to generate linking code. Make sure I can DM you!');
         }
     }
     
-    // !stats command
-    if (command === '!stats') {
-        const targetUser = message.mentions.users.first() || message.author;
-        const account = dataManager.getAccount(targetUser.id);
-        
-        if (!account) {
-            return message.reply(targetUser.id === message.author.id 
-                ? 'You haven\'t linked your account yet. Use `!linkaccount` to get started!'
-                : 'That user hasn\'t linked their account.');
+    // !rankedcode - Get room code based on roles (no mod required)
+    if (content === '!rankedcode') {
+        try {
+            const guilds = client.guilds.cache;
+            let isBanned = false;
+            let member = null;
+            
+            // Check ban status and get member
+            for (const guild of guilds.values()) {
+                if (await isUserBanned(guild, message.author.id)) {
+                    isBanned = true;
+                    break;
+                }
+                if (!member) {
+                    member = await guild.members.fetch(message.author.id).catch(() => null);
+                }
+            }
+            
+            if (isBanned) {
+                return message.reply('You are currently banned from competitive play.');
+            }
+            
+            if (!member) {
+                return message.reply('Could not find your server membership.');
+            }
+            
+            // Determine tier from roles
+            const tier = getTierFromRoles(member);
+            
+            if (!tier) {
+                return message.reply('You don\'t have a rank role! Use `!linkaccount` to get started.');
+            }
+            
+            // Get active codes for this tier
+            const codes = dataManager.getRoomCodesByTier(tier);
+            
+            if (codes.length === 0) {
+                return message.reply(`No active ${tier.toUpperCase()} tier rooms available right now. Please wait for an admin to create one!`);
+            }
+            
+            // Get the most recent code
+            const latestCode = codes[codes.length - 1];
+            
+            const dmEmbed = new EmbedBuilder()
+                .setTitle(`🎮 ${tier.toUpperCase()} Tier Room Code`)
+                .setDescription(`Here's your room code:`)
+                .addFields(
+                    { 
+                        name: '🔑 Room Code', 
+                        value: `**${latestCode.code}**`,
+                        inline: true
+                    },
+                    { 
+                        name: '🎯 Tier', 
+                        value: tier.toUpperCase(),
+                        inline: true
+                    },
+                    { 
+                        name: '⏰ Created', 
+                        value: `<t:${Math.floor(latestCode.createdAt / 1000)}:R>`,
+                        inline: true
+                    },
+                    {
+                        name: 'ℹ️ How to Join',
+                        value: 'Enter this code in Gorilla Tag to join the room!'
+                    }
+                )
+                .setColor(tier === 'high' ? 0xFF0000 : tier === 'mid' ? 0xFFAA00 : 0x00AAFF)
+                .setTimestamp();
+            
+            await message.author.send({ embeds: [dmEmbed] });
+            await message.reply('Check your DMs for the room code!');
+            
+        } catch (error) {
+            console.error('Error in !rankedcode:', error);
+            message.reply('Failed to get room code. Make sure I can DM you!');
         }
-        
-        const rank = getRankFromMMR(account.mmr);
-        const winRate = account.wins + account.losses > 0 
-            ? ((account.wins / (account.wins + account.losses)) * 100).toFixed(1)
-            : '0.0';
-        
-        const embed = new EmbedBuilder()
-            .setTitle(`${rank.emoji} ${targetUser.username}'s Stats`)
-            .addFields(
-                { name: 'Rank', value: `${rank.emoji} ${rank.name}`, inline: true },
-                { name: 'MMR', value: account.mmr.toString(), inline: true },
-                { name: 'Win Rate', value: `${winRate}%`, inline: true },
-                { name: 'Wins', value: account.wins.toString(), inline: true },
-                { name: 'Losses', value: account.losses.toString(), inline: true },
-                { name: 'Tags', value: account.tags.toString(), inline: true }
-            )
-            .setColor(rank.tier === 'high' ? 0xFF0000 : rank.tier === 'mid' ? 0xFFAA00 : 0x00AAFF)
-            .setTimestamp();
-        
-        message.reply({ embeds: [embed] });
     }
     
-    // !unlink command
-    if (command === '!unlink') {
+    // !stats - Show stats
+    if (content.startsWith('!stats')) {
+        try {
+            let targetUser = message.author;
+            
+            if (message.mentions.users.size > 0) {
+                targetUser = message.mentions.users.first();
+            }
+            
+            const account = dataManager.getAccount(targetUser.id);
+            
+            if (!account) {
+                return message.reply(targetUser.id === message.author.id ? 
+                    'You haven\'t linked your account yet! Use `!linkaccount` to get started.' :
+                    'This user hasn\'t linked their account yet.'
+                );
+            }
+            
+            const rank = getRankFromMMR(account.mmr);
+            const winRate = account.wins + account.losses > 0 ? 
+                ((account.wins / (account.wins + account.losses)) * 100).toFixed(1) : 0;
+            
+            const embed = new EmbedBuilder()
+                .setTitle(`${rank.emoji} ${targetUser.username}'s Stats`)
+                .addFields(
+                    { name: 'Rank', value: rank.name, inline: true },
+                    { name: 'MMR', value: account.mmr.toString(), inline: true },
+                    { name: 'Tier', value: rank.tier.toUpperCase(), inline: true },
+                    { name: 'Wins', value: account.wins.toString(), inline: true },
+                    { name: 'Losses', value: account.losses.toString(), inline: true },
+                    { name: 'Win Rate', value: `${winRate}%`, inline: true },
+                    { name: 'Total Tags', value: account.tags.toString(), inline: true },
+                    { name: 'Times Survived', value: account.timesSurvived.toString(), inline: true }
+                )
+                .setColor(0x00FF00)
+                .setTimestamp();
+            
+            message.reply({ embeds: [embed] });
+        } catch (error) {
+            console.error('Error in !stats:', error);
+            message.reply('Failed to fetch stats.');
+        }
+    }
+    
+    // !unlink - Unlink account
+    if (content === '!unlink') {
         const account = dataManager.getAccount(message.author.id);
         if (!account) {
-            return message.reply('Your account isn\'t linked.');
+            return message.reply('Your account is not linked.');
         }
         
         delete dataManager.accounts[message.author.id];
         dataManager.saveData(dataManager.accountsFile, dataManager.accounts);
         
-        message.reply('✅ Your account has been unlinked.');
+        message.reply('Your account has been unlinked. You can now use `!linkaccount` to link a different account.');
     }
     
-    // Admin commands
-    if (command === '!mmr') {
-        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return message.reply('You need administrator permissions.');
-        }
-        
-        const targetUser = message.mentions.users.first();
-        const mmrChange = parseInt(args[2]);
-        
-        if (!targetUser || isNaN(mmrChange)) {
-            return message.reply('Usage: `!mmr @user <amount>`');
-        }
-        
-        const account = dataManager.getAccount(targetUser.id);
-        if (!account) {
-            return message.reply('That user hasn\'t linked their account.');
-        }
-        
-        const updatedAccount = dataManager.updateMMR(targetUser.id, mmrChange);
-        const newRank = await updateUserRoles(message.guild, targetUser.id, updatedAccount.mmr);
-        
-        message.reply(`Updated ${targetUser.username}'s MMR by ${mmrChange}. New: ${updatedAccount.mmr} (${newRank.name})`);
-        
-        const trackingChannel = client.channels.cache.get(CONFIG.CHANNELS.MMR_TRACKING);
-        if (trackingChannel) {
-            trackingChannel.send(`<@${targetUser.id}> ${mmrChange > 0 ? '+' : ''}${mmrChange} MMR (Admin: ${message.author.tag})`);
-        }
-    }
-    
-    // !leaderboard command
-    if (command === '!leaderboard' || command === '!lb') {
-        const allAccounts = Object.entries(dataManager.accounts)
-            .map(([discordId, data]) => ({ discordId, ...data }))
-            .sort((a, b) => b.mmr - a.mmr)
-            .slice(0, 10);
-        
-        if (allAccounts.length === 0) {
-            return message.reply('No players ranked yet.');
-        }
-        
-        const leaderboardText = allAccounts.map((account, index) => {
-            const rank = getRankFromMMR(account.mmr);
-            return `**${index + 1}.** <@${account.discordId}> - ${rank.emoji} ${account.mmr} MMR`;
-        }).join('\n');
-        
-        const embed = new EmbedBuilder()
-            .setTitle('🏆 Ranked Leaderboard')
-            .setDescription(leaderboardText)
-            .setColor(0xFFD700)
-            .setTimestamp();
-        
-        message.reply({ embeds: [embed] });
-    }
-});
-
-// ============================================
-// REPORT MONITORING
-// ============================================
-client.on('messageCreate', async (message) => {
-    if (message.channelId !== CONFIG.CHANNELS.REPORTS) return;
-    if (message.author.bot) return;
-    
-    if (message.content.includes(CONFIG.TARGET_PLAYFAB_ID) || 
-        (message.embeds.length > 0 && message.embeds[0].description?.includes(CONFIG.TARGET_PLAYFAB_ID))) {
-        
-        const notificationChannel = client.channels.cache.get(CONFIG.CHANNELS.REPORT_NOTIFICATIONS);
-        if (notificationChannel) {
+    // !leaderboard or !lb - Show top 10 players
+    if (content === '!leaderboard' || content === '!lb') {
+        try {
+            const sortedAccounts = Object.entries(dataManager.accounts)
+                .map(([discordId, data]) => ({ discordId, ...data }))
+                .sort((a, b) => b.mmr - a.mmr)
+                .slice(0, 10);
+            
+            if (sortedAccounts.length === 0) {
+                return message.reply('No players have linked their accounts yet!');
+            }
+            
+            const leaderboardText = await Promise.all(
+                sortedAccounts.map(async (account, index) => {
+                    try {
+                        const user = await client.users.fetch(account.discordId);
+                        const rank = getRankFromMMR(account.mmr);
+                        return `${index + 1}. ${rank.emoji} **${user.username}** - ${account.mmr} MMR`;
+                    } catch {
+                        return `${index + 1}. Unknown User - ${account.mmr} MMR`;
+                    }
+                })
+            );
+            
             const embed = new EmbedBuilder()
-                .setTitle('⚠️ Report Detected')
-                .setDescription(`A report was detected in <#${CONFIG.CHANNELS.REPORTS}>`)
-                .addFields(
-                    { name: 'PlayFab ID', value: CONFIG.TARGET_PLAYFAB_ID },
-                    { name: 'Reporter', value: message.author.tag },
-                    { name: 'Link', value: message.url }
-                )
-                .setColor(0xFF0000)
+                .setTitle('🏆 Top 10 Leaderboard')
+                .setDescription(leaderboardText.join('\n'))
+                .setColor(0xFFD700)
                 .setTimestamp();
             
-            await notificationChannel.send({ embeds: [embed] });
-            
-            const account = dataManager.getAccountByPhotonId(CONFIG.TARGET_PLAYFAB_ID);
-            if (account) {
-                dataManager.updateMMR(account.discordId, CONFIG.MMR_SETTINGS.REPORT_MMR_PENALTY);
-                await updateUserRoles(message.guild, account.discordId, account.mmr);
-                
-                const trackingChannel = client.channels.cache.get(CONFIG.CHANNELS.MMR_TRACKING);
-                if (trackingChannel) {
-                    trackingChannel.send(`<@${account.discordId}> ${CONFIG.MMR_SETTINGS.REPORT_MMR_PENALTY} MMR (Report penalty)`);
-                }
+            message.reply({ embeds: [embed] });
+        } catch (error) {
+            console.error('Error in !leaderboard:', error);
+            message.reply('Failed to fetch leaderboard.');
+        }
+    }
+    
+    // !mmr @user <amount> - Admin only MMR adjustment
+    if (content.startsWith('!mmr')) {
+        try {
+            const member = message.guild.members.cache.get(message.author.id);
+            if (!member || !member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                return message.reply('You need administrator permissions to use this command.');
             }
+            
+            if (message.mentions.users.size === 0) {
+                return message.reply('Please mention a user: `!mmr @user <amount>`');
+            }
+            
+            const targetUser = message.mentions.users.first();
+            const args = message.content.split(' ');
+            const mmrChange = parseInt(args[2]);
+            
+            if (isNaN(mmrChange)) {
+                return message.reply('Please provide a valid MMR amount: `!mmr @user <amount>`');
+            }
+            
+            const account = dataManager.getAccount(targetUser.id);
+            if (!account) {
+                return message.reply('This user hasn\'t linked their account yet.');
+            }
+            
+            const updatedAccount = dataManager.updateMMR(targetUser.id, mmrChange);
+            await updateUserRoles(message.guild, targetUser.id, updatedAccount.mmr);
+            
+            const rank = getRankFromMMR(updatedAccount.mmr);
+            message.reply(`Updated ${targetUser.username}'s MMR: ${mmrChange > 0 ? '+' : ''}${mmrChange} → ${updatedAccount.mmr} (${rank.emoji} ${rank.name})`);
+            
+        } catch (error) {
+            console.error('Error in !mmr:', error);
+            message.reply('Failed to update MMR.');
         }
     }
 });
 
 // ============================================
-// API ENDPOINTS
+// EXPRESS API SERVER
 // ============================================
+const app = express();
+app.use(express.json());
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -576,7 +636,8 @@ app.post('/api/room/create', async (req, res) => {
                 .setDescription(`**Room Code:** \`${code}\``)
                 .addFields(
                     { name: 'Tier', value: tier.toUpperCase(), inline: true },
-                    { name: 'Created By', value: 'Admin', inline: true }
+                    { name: 'Created By', value: 'Admin', inline: true },
+                    { name: 'How to Join', value: 'Type `!rankedcode` in Discord or use the mod', inline: false }
                 )
                 .setColor(tier === 'HIGH' ? 0xFF0000 : tier === 'MID' ? 0xFFAA00 : 0x00AAFF)
                 .setTimestamp();
@@ -591,7 +652,7 @@ app.post('/api/room/create', async (req, res) => {
     }
 });
 
-// Confirm account link (called by admin mod when player detected)
+// Confirm account link (called by admin mod when player detected in LINK room)
 app.post('/api/account/confirm-link', async (req, res) => {
     try {
         const { temporaryPhotonName, playFabId } = req.body;
@@ -629,7 +690,7 @@ app.post('/api/account/confirm-link', async (req, res) => {
                     { name: 'Temporary Name Used', value: temporaryPhotonName },
                     { name: 'Starting Rank', value: `${rank.emoji} ${rank.name}` },
                     { name: 'Starting MMR', value: CONFIG.MMR_SETTINGS.STARTING_MMR.toString() },
-                    { name: '✅ You Can Now', value: 'Change your Photon name to anything you want!' }
+                    { name: '✅ You Can Now', value: 'Change your Photon name to anything you want!\nUse `!rankedcode` to get room codes without needing the mod!' }
                 )
                 .setColor(0x00FF00)
                 .setTimestamp();
@@ -713,7 +774,7 @@ app.get('/api/room/codes', (req, res) => {
     }
 });
 
-// Get pending linking sessions (for admin mod)
+// Get pending linking sessions (for admin mod to detect players)
 app.get('/api/linking/pending', (req, res) => {
     try {
         const pending = dataManager.getAllPendingLinks();
