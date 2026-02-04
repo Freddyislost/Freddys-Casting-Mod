@@ -1,0 +1,20 @@
+{
+  "name": "freddys-ranked-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Freddy's Ranked Gorilla Tag system",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "keywords": ["discord", "bot", "gorilla-tag", "ranked"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
