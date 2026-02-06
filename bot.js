@@ -7,7 +7,7 @@ const path = require('path');
 // CONFIGURATION
 // ============================================
 const CONFIG = {
-    DISCORD_TOKEN: '', // ← Replace this!
+    DISCORD_TOKEN: 'MTQ2NTA3NDQxMDc4MzI0ODU3MA.GF0L7C.uhVM0sZObYCw4mpsX-YPRVcPrciLcNeSxKAcZQ', // ← Replace this!
     API_PORT: 3000,
 
     CHANNELS: {
