@@ -7,7 +7,7 @@ const path = require('path');
 // CONFIGURATION
 // ============================================
 const CONFIG = {
-    DISCORD_TOKEN: 'MTQ2NTA3NDQxMDc4MzI0ODU3MA.GF0L7C.uhVM0sZObYCw4mpsX-YPRVcPrciLcNeSxKAcZQ', // ← Replace this!
+    DISCORD_TOKEN: '', // ← Replace this!
     API_PORT: 3000,
 
     CHANNELS: {
@@ -28,17 +28,16 @@ const CONFIG = {
     },
 
     RANK_CONFIG: {
-        BRONZE:   { name: 'Bronze',   mmrRange: [0, 499],    tier: 'low',  emoji: '🥉', roleId: '1468435586116489388' },
-        SILVER:   { name: 'Silver',   mmrRange: [500, 999],  tier: 'low',  emoji: '🥈', roleId: '1468435649756659712' },
-        GOLD:     { name: 'Gold',     mmrRange: [1000, 1999],tier: 'mid',  emoji: '🥇', roleId: '1468435997837754419' },
-        DIAMOND:  { name: 'Diamond',  mmrRange: [2000, 2999],tier: 'mid',  emoji: '💎', roleId: '1468436117404651552' },
-        SAPPHIRE: { name: 'Sapphire', mmrRange: [3000, 4999],tier: 'high', emoji: '💠', roleId: '1468436338725490881' },
+        BRONZE:   { name: 'Bronze',   mmrRange: [0, 499],     tier: 'low',  emoji: '🥉', roleId: '1468435586116489388' },
+        SILVER:   { name: 'Silver',   mmrRange: [500, 999],   tier: 'low',  emoji: '🥈', roleId: '1468435649756659712' },
+        GOLD:     { name: 'Gold',     mmrRange: [1000, 1999], tier: 'mid',  emoji: '🥇', roleId: '1468435997837754419' },
+        DIAMOND:  { name: 'Diamond',  mmrRange: [2000, 2999], tier: 'mid',  emoji: '💎', roleId: '1468436117404651552' },
+        SAPPHIRE: { name: 'Sapphire', mmrRange: [3000, 4999], tier: 'high', emoji: '💠', roleId: '1468436338725490881' },
         RUBY:     { name: 'Ruby',     mmrRange: [5000, 99999],tier: 'high', emoji: '🔴', roleId: '1468436386032914534' }
     },
 
     MMR_SETTINGS: {
-        STARTING_MMR: 200,
-        // You can expand these later if you want more detailed MMR rules
+        STARTING_MMR: 200
     }
 };
 
@@ -47,11 +46,11 @@ const CONFIG = {
 // ============================================
 class DataManager {
     constructor() {
-        this.dataDir = path.join(__dirname, 'data');
-        this.accountsFile  = path.join(this.dataDir, 'accounts.json');
-        this.codesFile     = path.join(this.dataDir, 'codes.json');
-        this.linkingFile   = path.join(this.dataDir, 'linking.json');
-        this.matchesFile   = path.join(this.dataDir, 'matches.json');
+        this.dataDir      = path.join(__dirname, 'data');
+        this.accountsFile = path.join(this.dataDir, 'accounts.json');
+        this.codesFile    = path.join(this.dataDir, 'codes.json');
+        this.linkingFile  = path.join(this.dataDir, 'linking.json');
+        this.matchesFile  = path.join(this.dataDir, 'matches.json');
 
         this.ensureDataDir();
 
@@ -71,7 +70,8 @@ class DataManager {
         try {
             if (fs.existsSync(filepath)) {
                 const content = fs.readFileSync(filepath, 'utf8');
-                return JSON.parse(content || '{}');
+                if (!content.trim()) return defaultValue;
+                return JSON.parse(content);
             }
         } catch (err) {
             console.error(`Failed to load ${filepath}:`, err.message);
@@ -93,10 +93,9 @@ class DataManager {
     }
 
     getAccountByPlayFabId(playFabId) {
-        if (!playFabId || typeof playFabId !== 'string' || playFabId.trim() === '' || playFabId === 'Unknown') {
-            return null;
-        }
+        if (!playFabId || typeof playFabId !== 'string') return null;
         const cleanId = playFabId.trim();
+        if (!cleanId || cleanId === 'Unknown') return null;
 
         for (const [discordId, acc] of Object.entries(this.accounts)) {
             if (acc.playFabId === cleanId) {
@@ -133,7 +132,7 @@ class DataManager {
 
         if (stats.isWin === true)      acc.wins++;
         if (stats.isWin === false)     acc.losses++;
-        if (typeof stats.tags === 'number')    acc.tags += stats.tags;
+        if (typeof stats.tags === 'number')     acc.tags += stats.tags;
         if (typeof stats.survived === 'number') acc.timesSurvived += stats.survived;
 
         this.saveData(this.accountsFile, this.accounts);
@@ -200,7 +199,6 @@ class DataManager {
             createdAt: Date.now()
         });
 
-        // Keep only last hour
         const oneHourAgo = Date.now() - 3600000;
         this.activeCodes = this.activeCodes.filter(c => c.createdAt > oneHourAgo);
 
@@ -209,7 +207,7 @@ class DataManager {
 
     getRoomCodesByTier(tier) {
         const fiveMinAgo = Date.now() - 300000;
-        return this.activeCodes.filter(c => 
+        return this.activeCodes.filter(c =>
             c.tier === tier.toLowerCase() && c.createdAt > fiveMinAgo
         );
     }
@@ -217,6 +215,28 @@ class DataManager {
     getAllActiveCodes() {
         const fiveMinAgo = Date.now() - 300000;
         return this.activeCodes.filter(c => c.createdAt > fiveMinAgo);
+    }
+
+    // ─── Matches ─────────────────────────────────────────────
+    addMatchRecord(record) {
+        this.matches.push({
+            id: record.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            playFabId: record.playFabId,
+            discordId: record.discordId,
+            mmrChange: record.mmrChange,
+            tags: record.tags,
+            survived: record.survived,
+            matchId: record.matchId || null,
+            roomCode: record.roomCode || null,
+            timestamp: record.timestamp || Date.now(),
+            flags: record.flags || []
+        });
+
+        if (this.matches.length > 10000) {
+            this.matches = this.matches.slice(-10000);
+        }
+
+        this.saveData(this.matchesFile, this.matches);
     }
 }
 
@@ -245,7 +265,7 @@ async function isUserBanned(guild, userId) {
 
 async function updateUserRoles(guild, userId, mmr) {
     try {
-        const member = await guild.members.fetch(userId);
+        const member = await guild.members.fetch(userId).catch(() => null);
         if (!member) return;
 
         const newRank = getRankFromMMR(mmr);
@@ -456,7 +476,6 @@ client.on('messageCreate', async message => {
 
         const updated = dataManager.updateMMR(target.id, amount);
 
-        // Update roles in all guilds
         for (const guild of client.guilds.cache.values()) {
             await updateUserRoles(guild, target.id, updated.mmr);
         }
@@ -490,6 +509,15 @@ app.get('/api/account/ban-status', async (req, res) => {
     res.json({ banned });
 });
 
+// Create linking session (called from mod)
+app.get('/api/linking/create', (req, res) => {
+    const { discordId } = req.query;
+    if (!discordId) return res.status(400).json({ error: 'Missing discordId' });
+
+    const photonName = dataManager.createLinkingSession(discordId);
+    return res.json({ photonName });
+});
+
 // Confirm link (called from game/mod)
 app.post('/api/account/confirm-link', async (req, res) => {
     const { temporaryPhotonName, playFabId } = req.body;
@@ -514,12 +542,10 @@ app.post('/api/account/confirm-link', async (req, res) => {
 
     dataManager.markSessionLinked(temporaryPhotonName);
 
-    // Update roles everywhere
     for (const guild of client.guilds.cache.values()) {
         await updateUserRoles(guild, session.discordId, CONFIG.MMR_SETTINGS.STARTING_MMR);
     }
 
-    // Send confirmation DM
     try {
         const user = await client.users.fetch(session.discordId);
         const rank = getRankFromMMR(CONFIG.MMR_SETTINGS.STARTING_MMR);
@@ -536,12 +562,81 @@ app.post('/api/account/confirm-link', async (req, res) => {
     res.json({ success: true, discordId: session.discordId, playFabId });
 });
 
-// Create room (admin)
+// MMR update from game/mod
+app.post('/api/mmr/update', async (req, res) => {
+    const { playFabId, mmrChange, tags, survived, matchId, roomCode, timestamp } = req.body || {};
+
+    if (!playFabId || typeof mmrChange !== 'number') {
+        return res.status(400).json({ error: 'Missing playFabId or mmrChange' });
+    }
+
+    const flags = [];
+    if (mmrChange > 200 || mmrChange < -200) {
+        flags.push('mmrChange_out_of_bounds');
+    }
+    if (typeof tags === 'number' && tags > 100) {
+        flags.push('tags_suspicious');
+    }
+    if (typeof survived === 'number' && survived > 10) {
+        flags.push('survived_suspicious');
+    }
+
+    const acc = dataManager.getAccountByPlayFabId(playFabId);
+    if (!acc) {
+        return res.status(404).json({ error: 'Account not linked for this PlayFab ID' });
+    }
+
+    const safeChange = Math.max(-200, Math.min(200, mmrChange));
+    const updated = dataManager.updateMMR(acc.discordId, safeChange, {
+        tags: typeof tags === 'number' ? tags : 0,
+        survived: typeof survived === 'number' ? survived : 0
+    });
+
+    dataManager.addMatchRecord({
+        playFabId,
+        discordId: acc.discordId,
+        mmrChange: safeChange,
+        tags: typeof tags === 'number' ? tags : 0,
+        survived: typeof survived === 'number' ? survived : 0,
+        matchId: matchId || null,
+        roomCode: roomCode || null,
+        timestamp: timestamp ? timestamp * 1000 : Date.now(),
+        flags
+    });
+
+    for (const guild of client.guilds.cache.values()) {
+        await updateUserRoles(guild, acc.discordId, updated.mmr);
+    }
+
+    const mmrChannel = client.channels.cache.get(CONFIG.CHANNELS.MMR_TRACKING);
+    if (mmrChannel) {
+        const rank = getRankFromMMR(updated.mmr);
+        const embed = new EmbedBuilder()
+            .setTitle('MMR Update')
+            .setDescription(`PlayFab: \`${playFabId}\`\nDiscord: <@${acc.discordId}>`)
+            .addFields(
+                { name: 'Change', value: safeChange.toString(), inline: true },
+                { name: 'New MMR', value: updated.mmr.toString(), inline: true },
+                { name: 'Rank', value: `${rank.emoji} ${rank.name}`, inline: true },
+                { name: 'Tags', value: String(tags ?? 0), inline: true },
+                { name: 'Survived', value: String(survived ?? 0), inline: true },
+                { name: 'Flags', value: flags.length ? flags.join(', ') : 'None', inline: false }
+            )
+            .setColor(flags.length ? 0xFF0000 : 0x00FF00)
+            .setTimestamp();
+
+        mmrChannel.send({ embeds: [embed] }).catch(() => {});
+    }
+
+    res.json({ success: true, mmr: updated.mmr, flags });
+});
+
+// Create room (admin / external)
 app.post('/api/room/create', async (req, res) => {
-    const { code, tier } = req.body;
+    const { code, tier, createdBy } = req.body;
     if (!code || !tier) return res.status(400).json({ error: 'Missing code or tier' });
 
-    dataManager.addRoomCode(code, tier);
+    dataManager.addRoomCode(code, tier, createdBy || 'API');
 
     const channel = client.channels.cache.get(CONFIG.CHANNELS.CODES);
     if (channel) {
@@ -551,15 +646,15 @@ app.post('/api/room/create', async (req, res) => {
                 .setDescription(`Code: \`${code}\``)
                 .addFields({ name: 'Tier', value: tier.toUpperCase() })
                 .setColor(0x5865F2)]
-        });
+        }).catch(() => {});
     }
 
     res.json({ success: true, code });
 });
 
-// Other endpoints remain similar — add them as needed
-
-// Start server after bot is ready
+// ============================================
+// STARTUP
+// ============================================
 client.once('ready', () => {
     console.log(`Bot ready: ${client.user.tag}`);
     console.log(`Loaded ${Object.keys(dataManager.accounts).length} accounts`);
