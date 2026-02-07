@@ -1,19 +1,27 @@
 {
-  "name": "freddys-ranked-bot",
+  "name": "gorilla-tag-mmr-bot",
   "version": "1.0.0",
-  "description": "Discord bot for Freddy's Ranked Gorilla Tag system",
+  "description": "Discord bot for Gorilla Tag MMR system with PlayFab integration",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
   },
-  "keywords": ["discord", "bot", "gorilla-tag", "ranked"],
+  "keywords": [
+    "discord",
+    "bot",
+    "gorilla-tag",
+    "mmr",
+    "playfab"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "discord.js": "^14.14.1",
-    "express": "^4.18.2"
+    "dotenv": "^16.3.1",
+    "playfab-sdk": "^2.155.230501"
   },
-  "engines": {
-    "node": ">=18.0.0"
+  "devDependencies": {
+    "nodemon": "^3.0.2"
   }
 }
