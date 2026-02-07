@@ -1,7 +1,7 @@
 // Discord Bot for Gorilla Tag MMR System
 // Handles account linking, rank management, and PlayFab integration
 
-const { Client, GatewayIntentBits, Events } = require('discord.js');
+const { Client, GatewayIntentBits, Events, Partials } = require('discord.js');
 const PlayFab = require('playfab-sdk/Scripts/PlayFab/PlayFab');
 const PlayFabServer = require('playfab-sdk/Scripts/PlayFab/PlayFabServer');
 require('dotenv').config();
@@ -215,7 +215,12 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.DirectMessages
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.MessageContent
+    ],
+    partials: [
+        Partials.Channel,
+        Partials.Message
     ]
 });
 
