@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "node bot.js",
+    "startCommand": "npx serve . -l 3000",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
