@@ -1,21 +1,20 @@
 {
-  "name": "freddys-casting-mod-site",
-  "version": "1.2.0",
-  "description": "Website for Freddy's Casting Mod — spectator camera mod for Gorilla Tag and Project Kitty",
-  "main": "index.html",
+  "name": "freddys-casting-mod-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Freddy's Casting Mod server",
+  "main": "bot.js",
   "scripts": {
-    "start": "npx serve . -l 3000"
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
   },
-  "keywords": [
-    "gorilla-tag",
-    "project-kitty",
-    "casting-mod",
-    "bepinex",
-    "vr-mod"
-  ],
+  "keywords": ["discord", "bot", "gorilla-tag", "casting-mod"],
   "author": "Freddy",
   "license": "MIT",
   "dependencies": {
-    "serve": "^14.2.1"
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
   }
 }
