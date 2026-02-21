@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Freddy's Casting Mod</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --panel: #141414;
+      --accent: #00d98c;
+      --accent-dim: #00a86b;
+      --accent-glow: rgba(0, 217, 140, 0.18);
+      --dim: #888;
+      --text: #e0e0e0;
+      --border: #222;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Rajdhani', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+
+
+    /* ── Header ── */
+    header {
+      position: relative;
+      padding: 60px 20px 40px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      animation: scanline 3s ease-in-out infinite;
+    }
+
+    @keyframes scanline {
+      0%, 100% { opacity: 0.3; transform: scaleX(0.5); }
+      50% { opacity: 1; transform: scaleX(1); }
+    }
+
+    .header-tag {
+      font-size: 13px;
+      color: var(--accent);
+      letter-spacing: 2px;
+      margin-bottom: 16px;
+      opacity: 0.7;
+    }
+
+    h1 {
+      font-size: clamp(2.5rem, 7vw, 5rem);
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #fff;
+      text-shadow: 0 0 40px var(--accent-glow), 0 0 80px var(--accent-glow);
+      line-height: 1;
+    }
+
+    h1 span { color: var(--accent); }
+
+    .version-badge {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 4px 14px;
+      background: var(--accent-glow);
+      border: 1px solid var(--accent);
+      border-radius: 2px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 2px;
+    }
+
+    .subtitle {
+      margin-top: 14px;
+      color: var(--dim);
+      font-size: 16px;
+      letter-spacing: 1px;
+    }
+
+    /* ── Main content ── */
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 60px 20px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--border), transparent);
+    }
+
+    /* ── Download Cards ── */
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 24px;
+      margin-bottom: 60px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 32px;
+      position: relative;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+      cursor: default;
+    }
+
+    .card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 30px var(--accent-glow), inset 0 0 20px var(--accent-glow);
+      transform: translateY(-2px);
+    }
+
+    .card-corner {
+      position: absolute;
+      top: -1px; right: -1px;
+      width: 20px; height: 20px;
+      border-top: 2px solid var(--accent);
+      border-right: 2px solid var(--accent);
+    }
+
+    .card-game {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      opacity: 0.8;
+    }
+
+    .card-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    .card-desc {
+      color: #aaa;
+      font-size: 15px;
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    .card-meta {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .meta-item {
+      font-size: 12px;
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .meta-item span { color: var(--accent); }
+
+    .download-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 14px 20px;
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .download-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--accent);
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+      z-index: 0;
+    }
+
+    .download-btn:hover::before { transform: translateX(0); }
+
+    .download-btn:hover {
+      color: #000;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .download-btn > * { position: relative; z-index: 1; }
+
+    .btn-arrow {
+      font-size: 18px;
+      transition: transform 0.2s;
+    }
+    .download-btn:hover .btn-arrow { transform: translateX(4px); }
+
+    /* ── Features ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 60px;
+    }
+
+    .feature {
+      padding: 20px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-top: 2px solid var(--accent);
+    }
+
+    .feature-icon {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+
+    .feature-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .feature-desc {
+      font-size: 13px;
+      color: #aaa;
+      line-height: 1.65;
+    }
+
+    /* ── Install steps ── */
+    .install-steps {
+      margin-bottom: 60px;
+    }
+
+    .step {
+      display: flex;
+      gap: 20px;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .step:last-child { border-bottom: none; }
+
+    .step-num {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 22px;
+      color: var(--accent);
+      min-width: 36px;
+      line-height: 1;
+    }
+
+    .step-content h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .step-content p {
+      font-size: 14px;
+      color: #aaa;
+      line-height: 1.7;
+    }
+
+    code {
+      background: rgba(0,217,140,0.08);
+      border: 1px solid rgba(0,217,140,0.2);
+      padding: 1px 6px;
+      border-radius: 2px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 30px 20px;
+      text-align: center;
+    }
+
+    footer p {
+      font-size: 13px;
+      color: var(--dim);
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── Responsive ── */
+    @media (max-width: 500px) {
+      .download-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 2.2rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <p class="header-tag">fcm v1.2.0</p>
+    <h1><span>Freddy's</span> Casting Mod</h1>
+    <p class="subtitle">A spectator camera mod for VR games — made for content creators and streamers.</p>
+  </header>
+
+  <main>
+
+    <!-- Downloads -->
+    <p class="section-title">Downloads</p>
+    <div class="download-grid">
+
+      <!-- Gorilla Tag -->
+      <div class="card">
+        <div class="card-corner"></div>
+        <p class="card-game">Gorilla Tag</p>
+        <h2 class="card-title">Gorilla Tag</h2>
+        <p class="card-desc">
+          Spectator cam, player nametags, WASD fly mode, Photon room tools, and smooth camera presets — everything you need to get great footage.
+        </p>
+        <div class="card-meta">
+          <div class="meta-item">v<span>1.2.0</span></div>
+          <div class="meta-item">Needs <span>BepInEx</span></div>
+          <div class="meta-item"><span>.dll</span> file</div>
+        </div>
+        <a class="download-btn"
+           href="https://github.com/bassdusted/PKRanked-FULLY-FIXED/releases/download/v1.2.0/FCM_GorillaTag.dll"
+           download>
+          <span>Download for Gorilla Tag</span>
+          <span class="btn-arrow">→</span>
+        </a>
+      </div>
+
+      <!-- Project Kitty -->
+      <div class="card">
+        <div class="card-corner"></div>
+        <p class="card-game">Project Kitty</p>
+        <h2 class="card-title">Project Kitty</h2>
+        <p class="card-desc">
+          The same casting mod, ported and tuned specifically for Project Kitty. Same great camera system, just built for a different game.
+        </p>
+        <div class="card-meta">
+          <div class="meta-item">v<span>1.2.0</span></div>
+          <div class="meta-item">Needs <span>BepInEx</span></div>
+          <div class="meta-item"><span>.dll</span> file</div>
+        </div>
+        <a class="download-btn"
+           href="https://github.com/bassdusted/PKRanked-FULLY-FIXED/releases/download/v1.2.0/FCM_ProjectKitty.dll"
+           download>
+          <span>Download for Project Kitty</span>
+          <span class="btn-arrow">→</span>
+        </a>
+      </div>
+
+    </div>
+
+    <!-- Features -->
+    <p class="section-title">What's included</p>
+    <div class="features-grid">
+      <div class="feature">
+        <div class="feature-icon">📷</div>
+        <div class="feature-title">Spectator Camera</div>
+        <div class="feature-desc">Smooth third-person camera with multiple smoothing modes — lerp, SmoothDamp, Expo, and Lunar.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🏷️</div>
+        <div class="feature-title">Player Nametags</div>
+        <div class="feature-desc">See player names floating above their heads. Fully customizable font, size, and position.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">✈️</div>
+        <div class="feature-title">WASD Fly</div>
+        <div class="feature-desc">Fly around freely using your keyboard. Stationary mode keeps you still when you let go.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🌐</div>
+        <div class="feature-title">Photon Tools</div>
+        <div class="feature-desc">Join any room by code, disconnect quickly, and stay in rooms without getting AFK kicked.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🎯</div>
+        <div class="feature-title">Quick Target Switch</div>
+        <div class="feature-desc">Press 1–9 to instantly switch the camera to any player in the room.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">⚙️</div>
+        <div class="feature-title">Settings Save</div>
+        <div class="feature-desc">Your settings are saved automatically so you never have to configure everything again.</div>
+      </div>
+    </div>
+
+    <!-- Install Instructions -->
+    <p class="section-title">How to install</p>
+    <div class="install-steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h3>Install BepInEx first</h3>
+          <p>If you haven't already, download BepInEx 5.x and drop its contents into your game's root folder. This is required for any mod to work.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h3>Grab the right download</h3>
+          <p>Pick your game up top and download the <code>.dll</code> file. Make sure you get the one that matches the game you're playing.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>Drop it in your plugins folder</h3>
+          <p>Move the <code>.dll</code> into <code>BepInEx/plugins/</code> inside your game folder. If the folder doesn't exist yet, just create it.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h3>Launch the game and press Tab</h3>
+          <p>Start your game and hit <code>TAB</code> to open the FCM menu. Click "Load Camera" and you're good to go!</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <p>Made by Freddy &mdash; <a href="https://github.com/bassdusted/PKRanked-FULLY-FIXED" target="_blank">View on GitHub</a> &mdash; Not affiliated with any game developer.</p>
+  </footer>
+
+</body>
+</html>
