@@ -1,27 +1,21 @@
 {
-  "name": "gorilla-tag-mmr-bot",
-  "version": "1.0.0",
-  "description": "Discord bot for Gorilla Tag MMR system with PlayFab integration",
-  "main": "bot.js",
+  "name": "freddys-casting-mod-site",
+  "version": "1.2.0",
+  "description": "Website for Freddy's Casting Mod — spectator camera mod for Gorilla Tag and Project Kitty",
+  "main": "index.html",
   "scripts": {
-    "start": "node bot.js",
-    "dev": "nodemon bot.js"
+    "start": "npx serve . -l 3000"
   },
   "keywords": [
-    "discord",
-    "bot",
     "gorilla-tag",
-    "mmr",
-    "playfab"
+    "project-kitty",
+    "casting-mod",
+    "bepinex",
+    "vr-mod"
   ],
-  "author": "",
+  "author": "Freddy",
   "license": "MIT",
   "dependencies": {
-    "discord.js": "^14.14.1",
-    "dotenv": "^16.3.1",
-    "playfab-sdk": "^2.155.230501"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.2"
+    "serve": "^14.2.1"
   }
 }
